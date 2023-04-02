@@ -1,6 +1,7 @@
 import streamlit as st
 import regex as re
-from db_funcs import db_setup, UserDB
+import pandas as pd
+from db_funcs import db_setup, UserDB, LedgerDB
 
 DB_FILE = "pkr.db"
 
@@ -33,8 +34,11 @@ class Auth:
             self.user_db.add_user(user, pwd)
     
 class Ledger:
-    def __init__(self):
-        pass
+    def __init__(self, db, username):
+        self.__db = LedgerDB(db)
+        self.__username = username
+        ledger = self.__db.get_ledger(username) #data, headers
+        self.__ledger = pd.DataFrame(ledger[0], columns=ledger[1])
 
     def display(self):
         pass

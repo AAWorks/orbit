@@ -41,3 +41,13 @@ class UserDB:
         else:
             self.__db.insert("users", username=username, password=password)
             st.session_state["username"] = username
+
+class LedgerDB:
+    def __init__(self, db):
+        self.__db = db
+    
+    def __create_ledger(self, username):
+        pass
+
+    def get_ledger(self, username: str) -> tuple: #(data, headers)
+        pass
