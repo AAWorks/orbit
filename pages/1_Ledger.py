@@ -6,7 +6,7 @@ from db_funcs import db_setup, UserDB, LedgerDB
 DB_FILE = "pkr.db"
 
 def streamlit_setup():
-    st.set_page_config(page_title="Orbit", page_icon=":spades:")
+    st.set_page_config(page_title="Variance", page_icon=":spades:")
     st.sidebar.success("Interative Poker Ledger")
     if "username" in st.session_state:
         st.title(f"{st.session_state['username']}'s Ledger:clubs:")
