@@ -36,12 +36,15 @@ class Auth:
 class Ledger:
     def __init__(self, db, username):
         self.__db = LedgerDB(db)
+        #st.dataframe(self.__db.raw_ledgers(username))
         self.__username = username
-        ledger = self.__db.get_ledger(username) #data, headers
-        self.__ledger = pd.DataFrame(ledger[0], columns=ledger[1])
+        self.__ledger = self.__db.get_base_ledger(username)
+        self.__stats = self.__db.get_ledger_stats(username)
 
     def display(self):
-        pass
+        st.columns([3, 2])
+        st.experimental_data_editor(self.__ledger)
+        st.dataframe(self.__stats)
 
     def update(self):
         pass
@@ -64,4 +67,5 @@ if "username" not in st.session_state:
     elif register:
         auth.register(username, password)
 else:
-    ledger = Ledger()
+    ledger = Ledger(db, st.session_state["username"])
+    ledger.display()

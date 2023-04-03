@@ -1,6 +1,7 @@
 import sqlite3
 from notanorm import SqliteDb
 import streamlit as st
+import pandas as pd
 
 ''' Database-related Functions '''
 
@@ -13,7 +14,7 @@ def db_setup():
                 password TEXT);") 
     db.query("CREATE TABLE IF NOT EXISTS ledgers (user TEXT, \
             dt DATETIME DEFAULT CURRENT_DATE, buy_in INTEGER, \
-            buy_out INTEGER);")
+            buy_out INTEGER, entry_id INTEGER PRIMARY KEY AUTOINCREMENT);")
     return db
 
 class UserDB:
@@ -46,8 +47,35 @@ class LedgerDB:
     def __init__(self, db):
         self.__db = db
     
-    def __create_ledger(self, username):
-        pass
+    def __add_entry(self, username, buy_in = 0, buy_out = 0):
+        self.__db.insert("ledgers", user=username, buy_in=buy_in, buy_out=buy_out)
 
-    def get_ledger(self, username: str) -> tuple: #(data, headers)
-        pass
+    def raw_ledgers(self, username):
+        self.__add_entry(username)
+        ledger = self.__db.select("ledgers")
+        return pd.DataFrame(ledger)
+
+    def get_base_ledger(self, username: str) -> pd.DataFrame:
+        st.write(self.__db.select("ledgers", user=username))
+        if len(self.__db.select("ledgers", user=username)) == 0:
+            self.__add_entry(username)
+        
+        sqlledger = self.__db.select_gen("ledgers", username=username, order_by="dt")
+        headers = ["User", "Date", "Buy In", "Buy Out", "entry_id"]
+        df = pd.DataFrame(sqlledger, columns=headers)
+
+        st.dataframe(df)
+        st.write(df['User'])
+        df.drop("User")
+        df.drop("entry_id")
+
+        return df
+    
+    def get_ledger_stats(self, username: str) -> pd.DataFrame:
+        ledger = self.get_base_ledger(username)
+        stats = pd.DataFrame()
+        
+        stats["Net $"] = ledger["Buy Out"] - ledger["Buy In"]
+        stats['%' + " Earnings"] = stats["Net $"] / ledger["Buy In"]
+
+        return stats
