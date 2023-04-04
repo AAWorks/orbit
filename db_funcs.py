@@ -13,7 +13,7 @@ def db_setup():
     db.query("CREATE TABLE IF NOT EXISTS users (username TEXT, \
                 password TEXT);") 
     db.query("CREATE TABLE IF NOT EXISTS ledgers (user TEXT, \
-            dt DATETIME DEFAULT CURRENT_DATE, buy_in INTEGER, \
+            timestamp TIMESTAMP DEFAULT CURRENT_DATE, buy_in INTEGER, \
             buy_out INTEGER, entry_id INTEGER PRIMARY KEY AUTOINCREMENT);")
     return db
 
@@ -47,35 +47,44 @@ class LedgerDB:
     def __init__(self, db):
         self.__db = db
     
-    def __add_entry(self, username, buy_in = 0, buy_out = 0):
+    def __add_entry(self, username, buy_in, buy_out):
         self.__db.insert("ledgers", user=username, buy_in=buy_in, buy_out=buy_out)
 
-    def raw_ledgers(self, username):
-        self.__add_entry(username)
-        ledger = self.__db.select("ledgers")
-        return pd.DataFrame(ledger)
-
     def get_base_ledger(self, username: str) -> pd.DataFrame:
-        st.write(self.__db.select("ledgers", user=username))
         if len(self.__db.select("ledgers", user=username)) == 0:
-            self.__add_entry(username)
-        
-        sqlledger = self.__db.select_gen("ledgers", username=username, order_by="dt")
-        headers = ["User", "Date", "Buy In", "Buy Out", "entry_id"]
-        df = pd.DataFrame(sqlledger, columns=headers)
+            self.__add_entry(username, 0, 0)
+    
+        sqlledger = [row for row in self.__db.select("ledgers", user=username)]
+        df = pd.DataFrame.from_records(sqlledger)
+        df = df.rename(columns={"timestamp": "Date",
+                                 "buy_in": "Buy In",
+                                 "buy_out": "Buy Out",
+                                 "entry_id": "ID"})
 
-        st.dataframe(df)
-        st.write(df['User'])
-        df.drop("User")
-        df.drop("entry_id")
+        df = df.drop("user", axis=1)
 
         return df
     
-    def get_ledger_stats(self, username: str) -> pd.DataFrame:
+    def get_enhanced_ledger(self, username: str) -> pd.DataFrame:
         ledger = self.get_base_ledger(username)
-        stats = pd.DataFrame()
-        
-        stats["Net $"] = ledger["Buy Out"] - ledger["Buy In"]
-        stats['%' + " Earnings"] = stats["Net $"] / ledger["Buy In"]
-
-        return stats
+        ledger["Net $"] = ledger["Buy Out"] - ledger["Buy In"]
+        ledger['%' + " Gain/Loss"] = ledger["Net $"] / ledger["Buy In"] * 100
+        ids = ledger["ID"]
+        ledger = ledger.drop("ID", axis=1)
+        ledger["ID"] = ids
+        return ledger
+    
+    def get_stats(self, ledger) -> pd.DataFrame:
+        handle_0 = sum(ledger["Buy In"])
+        if handle_0 == 0:
+            handle_0 = 1
+        stats = {"Capital Spent": sum(ledger["Buy In"]), 
+                 "Capital Earned": sum(ledger["Buy Out"]), 
+                 "Gross Profit": sum(ledger["Net $"]), 
+                 "% Gain/Loss": sum(ledger["Net $"]) / handle_0 * 100
+        }
+        return list(stats.keys()), list(stats.values())
+    
+    def delete_row(self, entry_id):
+        self.__db.delete("ledgers", entry_id=entry_id)
+        st.success("Row Deleted")
