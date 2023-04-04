@@ -2,6 +2,7 @@ import sqlite3
 from notanorm import SqliteDb
 import streamlit as st
 import pandas as pd
+import regex as re
 
 ''' Database-related Functions '''
 
@@ -13,8 +14,8 @@ def db_setup():
     db.query("CREATE TABLE IF NOT EXISTS users (username TEXT, \
                 password TEXT);") 
     db.query("CREATE TABLE IF NOT EXISTS ledgers (user TEXT, \
-            timestamp TIMESTAMP DEFAULT CURRENT_DATE, buy_in INTEGER, \
-            buy_out INTEGER, entry_id INTEGER PRIMARY KEY AUTOINCREMENT);")
+            timestamp TIMESTAMP DEFAULT CURRENT_DATE, buy_in FLOAT, \
+            buy_out FLOAT, entry_id INTEGER PRIMARY KEY AUTOINCREMENT);")
     return db
 
 class UserDB:
@@ -79,12 +80,36 @@ class LedgerDB:
         if handle_0 == 0:
             handle_0 = 1
         stats = {"Capital Spent": sum(ledger["Buy In"]), 
-                 "Capital Earned": sum(ledger["Buy Out"]), 
+                 "Revenue": sum(ledger["Buy Out"]), 
                  "Gross Profit": sum(ledger["Net $"]), 
                  "% Gain/Loss": sum(ledger["Net $"]) / handle_0 * 100
         }
         return list(stats.keys()), list(stats.values())
     
-    def delete_row(self, entry_id):
-        self.__db.delete("ledgers", entry_id=entry_id)
-        st.success("Row Deleted")
+    def __check_buy_inputs(self, buy_in, buy_out):
+        return re.match("^\d*(\.\d{0,2})?$", buy_in) and re.match("^\d*(\.\d{0,2})?$", buy_out)
+
+    def __entry_exists(self, entry_id: str):
+        return self.__db.select("ledgers", entry_id=int(entry_id))
+
+    def add_row(self, username, buy_in: str, buy_out: str):
+        if self.__check_buy_inputs(buy_in, buy_out):    
+            self.__add_entry(username, float(buy_in), float(buy_out))
+            st.success("Entry Added")
+        else:
+            st.error("Inputs must be a proper monetary amount.")
+
+    def update_row(self, entry_id: str, buy_in: str, buy_out: str):
+        if self.__entry_exists and self.__check_buy_inputs(buy_in, buy_out):
+            self.__db.update("ledgers", entry_id=int(entry_id), 
+                             buy_in=float(buy_in), buy_out=float(buy_out))
+            st.success("Entry Updated")
+        else:
+            st.error("Entry must exist and buy inputs must be numerical.")
+    
+    def delete_row(self, entry_id: str):
+        if self.__entry_exists:
+            self.__db.delete("ledgers", entry_id=int(entry_id))
+            st.success("Entry Deleted")
+        else:
+            st.error("Entry not found.")
