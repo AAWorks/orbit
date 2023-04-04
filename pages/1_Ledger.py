@@ -54,7 +54,7 @@ class Ledger:
             buy_out = col2.text_input("Buy Out $")
             add = st.form_submit_button(label='Add', use_container_width=True)
         if add:
-            pass
+            self.__ledger_db.add_row(self.__username, buy_in, buy_out)
 
     def __update_entry(self):
         with st.form(key='update'):
@@ -64,35 +64,34 @@ class Ledger:
             buy_out = col2.text_input("Buy Out $")
             update = st.form_submit_button(label='Update', use_container_width=True)
         if update:
-            pass
+            self.__ledger_db.update_row(rowid, buy_in, buy_out)
 
     def __drop_entry(self):
         with st.form(key='drop'):
             rowid = st.text_input("Entry ID")
             drop = st.form_submit_button(label='Drop', use_container_width=True)
         if drop:
-            pass
+            self.__ledger_db.delete_row(rowid)
 
     def __display_stats(self, ledger: pd.DataFrame):
         _, col1, col2, col3, _ = st.columns([6, 6, 6, 6, 2])
         headers, stats = self.__ledger_db.get_stats(ledger)
         col1.metric(headers[0], f"${stats[0]}")
         col2.metric(headers[1], f"${stats[1]}")
-        col3.metric(headers[2], f"${stats[2]}", f"{stats[3]}%")
+        col3.metric(headers[2], "{:0.2f}%".format(stats[2]), "{:0.2f}%".format(stats[3]))
 
     def display(self):
         ledger = self.__ledger_db.get_enhanced_ledger(self.__username)
         self.__display_stats(ledger)
         st.dataframe(ledger, use_container_width=True)
+
+    def update(self):
         with st.expander("Add Ledger Entry"):
             self.__add_entry()
         with st.expander("Update Ledger Entry"):
             self.__update_entry()
         with st.expander("Remove Ledger Entry"):
             self.__drop_entry()
-
-    def update(self):
-        pass
 
 if __name__ == "__main__":
     streamlit_setup()
@@ -117,5 +116,6 @@ if __name__ == "__main__":
         ledger = Ledger(db, st.session_state["username"])
         with log:
             ledger.display()
+            ledger.update()
         with graph:
             st.write("HI")
