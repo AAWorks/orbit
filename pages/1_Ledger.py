@@ -6,12 +6,21 @@ from db_funcs import db_setup, UserDB, LedgerDB
 DB_FILE = "pkr.db"
 
 def streamlit_setup():
-    st.set_page_config(page_title="Variance", page_icon=":spades:")
+    st.set_page_config(page_title="Variance", page_icon=":diamonds:")
     st.sidebar.success("Interative Poker Ledger")
     if "username" in st.session_state:
-        st.title(f"{st.session_state['username']}'s Ledger:clubs:")
+        st.title(f"{st.session_state['username']}'s Ledger")
     else:
         st.title('Ledger:clubs:')
+
+def drop_table_indices():
+    hide_table_row_index = """
+            <style>
+            thead tr th:first-child {display:none}
+            tbody th {display:none}
+            </style>
+            """
+    st.markdown(hide_table_row_index, unsafe_allow_html=True)
 
 class Auth:
     def __init__(self, db):
@@ -19,7 +28,7 @@ class Auth:
 
     def __check_inputs(self, user, pwd):
         pwd_reqs = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$"
-        return re.match(pwd_reqs, pwd) and user.isalnum()
+        return re.match(pwd_reqs, pwd) and user.replace(" ", "").isalnum()
 
     def authorize(self, user, pwd):
         if not self.__check_inputs(user, pwd):
@@ -35,16 +44,38 @@ class Auth:
     
 class Ledger:
     def __init__(self, db, username):
-        self.__db = LedgerDB(db)
-        #st.dataframe(self.__db.raw_ledgers(username))
+        self.__ledger_db = LedgerDB(db)
         self.__username = username
-        self.__ledger = self.__db.get_base_ledger(username)
-        self.__stats = self.__db.get_ledger_stats(username)
+
+    def __add_entry(self):
+        st.write("Hi")
+        pass
+
+    def __update_entry(self):
+        st.write("Hi")
+        pass
+
+    def __drop_entry(self):
+        st.write("Hi")
+        pass
+
+    def __display_stats(self, ledger: pd.DataFrame):
+        _, col1, col2, col3, _ = st.columns([6, 6, 6, 6, 2])
+        headers, stats = self.__ledger_db.get_stats(ledger)
+        col1.metric(headers[0], f"${stats[0]}")
+        col2.metric(headers[1], f"${stats[1]}")
+        col3.metric(headers[2], f"${stats[2]}", f"{stats[3]}%")
 
     def display(self):
-        st.columns([3, 2])
-        st.experimental_data_editor(self.__ledger)
-        st.dataframe(self.__stats)
+        ledger = self.__ledger_db.get_enhanced_ledger(self.__username)
+        self.__display_stats(ledger)
+        st.dataframe(ledger, use_container_width=True)
+        with st.expander("Add Ledger Entry"):
+            self.__add_entry()
+        with st.expander("Update Ledger Entry"):
+            self.__update_entry()
+        with st.expander("Remove Ledger Entry"):
+            self.__drop_entry()
 
     def update(self):
         pass
@@ -67,5 +98,9 @@ if "username" not in st.session_state:
     elif register:
         auth.register(username, password)
 else:
+    log, graph = st.tabs(["Log", "Graph"])
     ledger = Ledger(db, st.session_state["username"])
-    ledger.display()
+    with log:
+        ledger.display()
+    with graph:
+        st.write("HI")
