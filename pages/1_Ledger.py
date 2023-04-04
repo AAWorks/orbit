@@ -74,18 +74,22 @@ class Ledger:
             self.__ledger_db.delete_row(rowid)
 
     def __display_stats(self, ledger: pd.DataFrame):
-        _, col1, col2, col3, _ = st.columns([6, 6, 6, 6, 2])
+        _, col1, _, col2, _, col3, _ = st.columns([3,4,1,4,1,4,2])
         headers, stats = self.__ledger_db.get_stats(ledger)
-        col1.metric(headers[0], f"${stats[0]}")
-        col2.metric(headers[1], f"${stats[1]}")
-        col3.metric(headers[2], "{:0.2f}%".format(stats[2]), "{:0.2f}%".format(stats[3]))
+        col1.metric(headers[0], "${:0.2f}".format(stats[0]))
+        col2.metric(headers[1], "${:0.2f}".format(stats[1]))
+        col3.metric(headers[2], "${:0.2f}".format(stats[2]), "{:0.2f}%".format(stats[3]))
 
     def display(self):
         ledger = self.__ledger_db.get_enhanced_ledger(self.__username)
         self.__display_stats(ledger)
-        st.dataframe(ledger, use_container_width=True)
+        table = ledger.style.format({"Buy In": '${:.2f}', "Buy Out": '${:.2f}',
+                                      "Gain/Loss": '${:.2f}', "% Change": "{0:+g}%"},
+                                      na_rep="N/A", precision=2)
+        st.dataframe(table, use_container_width=True)
 
     def update(self):
+        st.button("Refresh Ledger", use_container_width=True)
         with st.expander("Add Ledger Entry"):
             self.__add_entry()
         with st.expander("Update Ledger Entry"):
