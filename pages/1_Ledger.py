@@ -48,16 +48,30 @@ class Ledger:
         self.__username = username
 
     def __add_entry(self):
-        st.write("Hi")
-        pass
+        with st.form(key='add'):
+            col1, col2 = st.columns(2)
+            buy_in = col1.text_input("Buy In $")
+            buy_out = col2.text_input("Buy Out $")
+            add = st.form_submit_button(label='Add', use_container_width=True)
+        if add:
+            pass
 
     def __update_entry(self):
-        st.write("Hi")
-        pass
+        with st.form(key='update'):
+            col0, col1, col2 = st.columns(3)
+            rowid = col0.text_input("Entry ID")
+            buy_in = col1.text_input("Buy In $")
+            buy_out = col2.text_input("Buy Out $")
+            update = st.form_submit_button(label='Update', use_container_width=True)
+        if update:
+            pass
 
     def __drop_entry(self):
-        st.write("Hi")
-        pass
+        with st.form(key='drop'):
+            rowid = st.text_input("Entry ID")
+            drop = st.form_submit_button(label='Drop', use_container_width=True)
+        if drop:
+            pass
 
     def __display_stats(self, ledger: pd.DataFrame):
         _, col1, col2, col3, _ = st.columns([6, 6, 6, 6, 2])
@@ -80,27 +94,28 @@ class Ledger:
     def update(self):
         pass
 
-streamlit_setup()
-db = db_setup()
-if "username" not in st.session_state:
-    with st.form(key='authy'):
-        st.write("Sign In to View Personal Ledger")
-        username = st.text_input("Username (No special characters)")
-        password = st.text_input("Password (8+ characters, \
-                                1+ uppercase letters, \
-                                1+ lowercase letters, 1+ numbers \
-                                and 1+ special character)")
-        login = st.form_submit_button(label='Log In', use_container_width=True)
-        register = st.form_submit_button(label='Register', use_container_width=True)
-    auth = Auth(db)
-    if login:
-        auth.authorize(username, password)
-    elif register:
-        auth.register(username, password)
-else:
-    log, graph = st.tabs(["Log", "Graph"])
-    ledger = Ledger(db, st.session_state["username"])
-    with log:
-        ledger.display()
-    with graph:
-        st.write("HI")
+if __name__ == "__main__":
+    streamlit_setup()
+    db = db_setup()
+    if "username" not in st.session_state:
+        with st.form(key='authy'):
+            st.write("Sign In to View Personal Ledger")
+            username = st.text_input("Username (No special characters)")
+            password = st.text_input("Password (8+ characters, \
+                                    1+ uppercase letters, \
+                                    1+ lowercase letters, 1+ numbers \
+                                    and 1+ special character)")
+            login = st.form_submit_button(label='Log In', use_container_width=True)
+            register = st.form_submit_button(label='Register', use_container_width=True)
+        auth = Auth(db)
+        if login:
+            auth.authorize(username, password)
+        elif register:
+            auth.register(username, password)
+    else:
+        log, graph = st.tabs(["Log", "Graph"])
+        ledger = Ledger(db, st.session_state["username"])
+        with log:
+            ledger.display()
+        with graph:
+            st.write("HI")
