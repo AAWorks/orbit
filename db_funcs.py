@@ -68,8 +68,8 @@ class LedgerDB:
     
     def get_enhanced_ledger(self, username: str) -> pd.DataFrame:
         ledger = self.get_base_ledger(username)
-        ledger["Net $"] = ledger["Buy Out"] - ledger["Buy In"]
-        ledger['%' + " Gain/Loss"] = ledger["Net $"] / ledger["Buy In"] * 100
+        ledger["Gain/Loss"] = ledger["Buy Out"] - ledger["Buy In"]
+        ledger["% Change"] = ledger["Gain/Loss"] / ledger["Buy In"] * 100
         ids = ledger["ID"]
         ledger = ledger.drop("ID", axis=1)
         ledger["ID"] = ids
@@ -81,8 +81,8 @@ class LedgerDB:
             handle_0 = 1
         stats = {"Capital Spent": sum(ledger["Buy In"]), 
                  "Revenue": sum(ledger["Buy Out"]), 
-                 "Gross Profit": sum(ledger["Net $"]), 
-                 "% Gain/Loss": sum(ledger["Net $"]) / handle_0 * 100
+                 "Gross Profit": sum(ledger["Gain/Loss"]), 
+                 "% Change": sum(ledger["Gain/Loss"]) / handle_0 * 100
         }
         return list(stats.keys()), list(stats.values())
     
