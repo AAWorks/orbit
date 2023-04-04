@@ -1,0 +1,7 @@
+add user's own dates (transfer their old ledgers)
+graph user's wins/losses
+
+7-day playing streak (fire emoji) (metrics on ledger or on graph (see below))
+graph user's playing habits (add in day of week?)
+
+after that move on to ai...?
