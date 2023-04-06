@@ -73,8 +73,8 @@ class LedgerDB:
         ledger = self.get_base_ledger(username)
         ledger['Date'] = pd.to_datetime(ledger['Date']).dt.date
         ledger = ledger.sort_values(by='Date')
-        ledger["PnL"] = ledger["Buy Out"] - ledger["Buy In"]
-        ledger["% Change"] = ledger["PnL"] / ledger["Buy In"] * 100
+        ledger["PnL ($)"] = ledger["Buy Out"] - ledger["Buy In"]
+        ledger["PnL (%)"] = ledger["PnL ($)"] / ledger["Buy In"] * 100
         ids = ledger["Entry"]
         ledger = ledger.drop("Entry", axis=1)
         ledger["Entry"] = ids
@@ -86,19 +86,19 @@ class LedgerDB:
             handle_0 = 1
         stats = {"Capital Spent": sum(ledger["Buy In"]), 
                  "Revenue": sum(ledger["Buy Out"]), 
-                 "Gross Profit": sum(ledger["PnL"]), 
-                 "% Change": sum(ledger["PnL"]) / handle_0 * 100
+                 "Total PnL": sum(ledger["PnL ($)"]), 
+                 "Total Growth": sum(ledger["PnL ($)"]) / handle_0 * 100
         }
-        return list(stats.keys()), list(stats.values())
+        return stats
     
     def __check_buy_inputs(self, buy_in, buy_out):
         return (buy_in and buy_out and re.match("^\d*(\.\d{0,2})?$", buy_in) 
                 and re.match("^\d*(\.\d{0,2})?$", buy_out))
 
-    def __entry_exists(self, entry_id: str):
-        if isinstance(entry_id, int):
-            return self.__db.select("ledgers", entry_id=int(entry_id))
-        return False
+    def __entry_exists(self, entry_id: str, username: str):
+        if not isinstance(entry_id, int):
+            return False
+        return self.__db.select("ledgers", entry_id=int(entry_id), user=username)
 
     def add_row(self, username, buy_in: str, buy_out: str, date):
         if self.__check_buy_inputs(buy_in, buy_out):    
@@ -107,16 +107,16 @@ class LedgerDB:
         else:
             st.error("Inputs must be a proper monetary amount.")
 
-    def update_row(self, entry_id: str, buy_in: str, buy_out: str, date):
-        if self.__entry_exists and self.__check_buy_inputs(buy_in, buy_out):
+    def update_row(self, entry_id: str, buy_in: str, buy_out: str, date, username):
+        if self.__entry_exists(entry_id, username) and self.__check_buy_inputs(buy_in, buy_out):
             self.__db.update("ledgers", entry_id=int(entry_id), 
                              buy_in=float(buy_in), buy_out=float(buy_out), timestamp=date)
             st.success("Entry Updated")
         else:
             st.error("Entry must exist and buy inputs must be numerical.")
     
-    def delete_row(self, entry_id: str):
-        if self.__entry_exists:
+    def delete_row(self, entry_id: str, username):
+        if self.__entry_exists(entry_id, username):
             self.__db.delete("ledgers", entry_id=int(entry_id))
             st.success("Entry Deleted")
         else:
@@ -126,21 +126,31 @@ class VisDB:
     def __init__(self, db):
         self.__db = db
 
-    def get_date_pnl(self, ledger):
+    def pnl_by_date(self, ledger):
         resultants = pd.DataFrame()
         resultants['Date'] = pd.to_datetime(ledger['Date'])
+        net = [0]
+        for val in ledger["PnL ($)"]:
+            net.append(net[-1] + val)
+        resultants["Total PnL (Profits & Losses)"] = net[1:]
+        return resultants.sort_values(by='Date')
+    
+    def net_by_entry(self, ledger):
+        resultants = pd.DataFrame()
         profit, loss = [], []
-        for val in ledger["PnL"]:
-            if val >= 0:
+        for val in ledger["PnL ($)"]:
+            if val == 0:
+                pass
+            elif val > 0:
                 profit.append(val)
                 loss.append(0)
             else:
                 profit.append(0)
                 loss.append(val)
         
-        resultants["A) Nothing"] = [0] * len(profit)
-        resultants["B) Profit"] = profit
-        resultants["C) Loss"] = loss
-        
-        #resultants["Blank"] = [0] * len(profit)
-        return resultants.sort_values(by='Date')
+        resultants["    "] = [0] * len(profit)
+        resultants["A) Profit"] = profit
+        resultants["B) Loss"] = loss
+        resultants["Significant Entries"] = range(1, len(profit) + 1)
+
+        return resultants
