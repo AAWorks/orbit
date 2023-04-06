@@ -5,7 +5,6 @@ import numpy as np
 import plotly.express as px
 from db_funcs import db_setup, UserDB, LedgerDB, VisDB
 import datetime
-import altair as alt
 
 DB_FILE = "pkr.db"
 
@@ -13,7 +12,7 @@ def streamlit_setup():
     st.set_page_config(page_title="Variance", page_icon=":diamonds:")
     st.sidebar.success("Interative Poker Ledger")
     if "username" in st.session_state:
-        st.title(f"{st.session_state['username']}'s Ledger")
+        st.title(f"{st.session_state['username']}")
     else:
         st.title('Ledger:clubs:')
 
@@ -72,27 +71,28 @@ class Ledger:
             buy_out = col3.text_input("Buy Out $")
             update = st.form_submit_button(label='Update', use_container_width=True)
         if update:
-            self.__ledger_db.update_row(rowid, buy_in, buy_out, date)
+            self.__ledger_db.update_row(rowid, buy_in, buy_out, date, self.__username)
 
     def __drop_entry(self):
         with st.form(key='drop'):
             rowid = st.text_input("Entry ID")
             drop = st.form_submit_button(label='Drop', use_container_width=True)
         if drop:
-            self.__ledger_db.delete_row(rowid)
+            self.__ledger_db.delete_row(rowid, self.__username)
 
     def __display_stats(self, ledger: pd.DataFrame):
         _, col1, _, col2, _, col3, _ = st.columns([3,4,1,4,1,4,2])
-        headers, stats = self.__ledger_db.get_stats(ledger)
-        col1.metric(headers[0], "${:0.2f}".format(stats[0]))
-        col2.metric(headers[1], "${:0.2f}".format(stats[1]))
-        col3.metric(headers[2], "${:0.2f}".format(stats[2]), "{:0.2f}%".format(stats[3]))
+        stats = self.__ledger_db.get_stats(ledger)
+        c1, c2, c3, c4 = "Capital Spent", "Revenue", "Total PnL", "Total Growth"
+        col1.metric(c1, "${:0.2f}".format(stats[c1]))
+        col2.metric(c2, "${:0.2f}".format(stats[c2]))
+        col3.metric(c3, "${:0.2f}".format(stats[c3]), "{:0.2f}%".format(stats[c4]))
 
     def display(self):
         ledger = self.__ledger_db.get_enhanced_ledger(self.__username)
         self.__display_stats(ledger)
         table = ledger.style.format({"Buy In": '${:.2f}', "Buy Out": '${:.2f}',
-                                      "PnL": '${:.2f}', "% Change": "{0:+g}%"},
+                                      "PnL ($)": '${:.2f}', "PnL (%)": "{0:+g}%"},
                                       na_rep="N/A", precision=2)
         st.dataframe(table, use_container_width=True)
 
@@ -113,11 +113,16 @@ class Visualize:
 
     def graph_datevspnl(self):
         ledger = self.__db.get_enhanced_ledger(self.__username)
-        data = self.__graphs.get_date_pnl(ledger)
-        fig = px.line(data, x='Date', y="B) Profit")
+        pnlxdate = self.__graphs.pnl_by_date(ledger)
+        fig = px.line(pnlxdate, x='Date', y="Total PnL (Profits & Losses)", 
+                      title="Total Profits & Losses Since Start of Ledger")
         st.plotly_chart(fig)
-        data = data.drop("Date", axis=1)
-        st.bar_chart(data, use_container_width=True)
+    
+    def graph_plvsentry(self):
+        ledger = self.__db.get_enhanced_ledger(self.__username)
+        plxentry = self.__graphs.net_by_entry(ledger)
+        st.write("**Profits & Losses on an Entry-by-Entry Basis**")
+        st.bar_chart(plxentry, x="Significant Entries", use_container_width=True)
 
 if __name__ == "__main__":
     streamlit_setup()
@@ -138,12 +143,14 @@ if __name__ == "__main__":
         elif register:
             auth.register(username, password)
     else:
-        log, graph = st.tabs(["Log", "Graph"])
+        log, datevspnl, plvsentry = st.tabs(["Ledger", "Total PnL Over Time", "PnL Per Entry Over Time"])
         user = st.session_state["username"]
         ledger = Ledger(db, user)
         vis = Visualize(db, user)
         with log:
             ledger.display()
             ledger.update()
-        with graph:
+        with datevspnl:
             vis.graph_datevspnl()
+        with plvsentry:
+            vis.graph_plvsentry()
