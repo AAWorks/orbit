@@ -2,7 +2,9 @@ import sqlite3
 from notanorm import SqliteDb
 import streamlit as st
 import pandas as pd
+import numpy as np
 import regex as re
+import datetime
 
 ''' Database-related Functions '''
 
@@ -48,19 +50,20 @@ class LedgerDB:
     def __init__(self, db):
         self.__db = db
     
-    def __add_entry(self, username, buy_in, buy_out):
-        self.__db.insert("ledgers", user=username, buy_in=buy_in, buy_out=buy_out)
+    def __add_entry(self, username, buy_in, buy_out, date):
+        self.__db.insert("ledgers", user=username, buy_in=buy_in, buy_out=buy_out, timestamp=date)
 
     def get_base_ledger(self, username: str) -> pd.DataFrame:
         if len(self.__db.select("ledgers", user=username)) == 0:
-            self.__add_entry(username, 0, 0)
+            yesterday = datetime.date.today - datetime.timedelta(days = 1)
+            self.__add_entry(username, 0, 0, yesterday)
     
         sqlledger = [row for row in self.__db.select("ledgers", user=username)]
         df = pd.DataFrame.from_records(sqlledger)
         df = df.rename(columns={"timestamp": "Date",
                                  "buy_in": "Buy In",
                                  "buy_out": "Buy Out",
-                                 "entry_id": "ID"})
+                                 "entry_id": "Entry"})
 
         df = df.drop("user", axis=1)
 
@@ -68,11 +71,13 @@ class LedgerDB:
     
     def get_enhanced_ledger(self, username: str) -> pd.DataFrame:
         ledger = self.get_base_ledger(username)
-        ledger["Gain/Loss"] = ledger["Buy Out"] - ledger["Buy In"]
-        ledger["% Change"] = ledger["Gain/Loss"] / ledger["Buy In"] * 100
-        ids = ledger["ID"]
-        ledger = ledger.drop("ID", axis=1)
-        ledger["ID"] = ids
+        ledger['Date'] = pd.to_datetime(ledger['Date']).dt.date
+        ledger = ledger.sort_values(by='Date')
+        ledger["PnL"] = ledger["Buy Out"] - ledger["Buy In"]
+        ledger["% Change"] = ledger["PnL"] / ledger["Buy In"] * 100
+        ids = ledger["Entry"]
+        ledger = ledger.drop("Entry", axis=1)
+        ledger["Entry"] = ids
         return ledger
     
     def get_stats(self, ledger) -> pd.DataFrame:
@@ -81,28 +86,31 @@ class LedgerDB:
             handle_0 = 1
         stats = {"Capital Spent": sum(ledger["Buy In"]), 
                  "Revenue": sum(ledger["Buy Out"]), 
-                 "Gross Profit": sum(ledger["Gain/Loss"]), 
-                 "% Change": sum(ledger["Gain/Loss"]) / handle_0 * 100
+                 "Gross Profit": sum(ledger["PnL"]), 
+                 "% Change": sum(ledger["PnL"]) / handle_0 * 100
         }
         return list(stats.keys()), list(stats.values())
     
     def __check_buy_inputs(self, buy_in, buy_out):
-        return re.match("^\d*(\.\d{0,2})?$", buy_in) and re.match("^\d*(\.\d{0,2})?$", buy_out)
+        return (buy_in and buy_out and re.match("^\d*(\.\d{0,2})?$", buy_in) 
+                and re.match("^\d*(\.\d{0,2})?$", buy_out))
 
     def __entry_exists(self, entry_id: str):
-        return self.__db.select("ledgers", entry_id=int(entry_id))
+        if isinstance(entry_id, int):
+            return self.__db.select("ledgers", entry_id=int(entry_id))
+        return False
 
-    def add_row(self, username, buy_in: str, buy_out: str):
+    def add_row(self, username, buy_in: str, buy_out: str, date):
         if self.__check_buy_inputs(buy_in, buy_out):    
-            self.__add_entry(username, float(buy_in), float(buy_out))
+            self.__add_entry(username, float(buy_in), float(buy_out), date)
             st.success("Entry Added")
         else:
             st.error("Inputs must be a proper monetary amount.")
 
-    def update_row(self, entry_id: str, buy_in: str, buy_out: str):
+    def update_row(self, entry_id: str, buy_in: str, buy_out: str, date):
         if self.__entry_exists and self.__check_buy_inputs(buy_in, buy_out):
             self.__db.update("ledgers", entry_id=int(entry_id), 
-                             buy_in=float(buy_in), buy_out=float(buy_out))
+                             buy_in=float(buy_in), buy_out=float(buy_out), timestamp=date)
             st.success("Entry Updated")
         else:
             st.error("Entry must exist and buy inputs must be numerical.")
@@ -113,3 +121,26 @@ class LedgerDB:
             st.success("Entry Deleted")
         else:
             st.error("Entry not found.")
+
+class VisDB:
+    def __init__(self, db):
+        self.__db = db
+
+    def get_date_pnl(self, ledger):
+        resultants = pd.DataFrame()
+        resultants['Date'] = pd.to_datetime(ledger['Date'])
+        profit, loss = [], []
+        for val in ledger["PnL"]:
+            if val >= 0:
+                profit.append(val)
+                loss.append(0)
+            else:
+                profit.append(0)
+                loss.append(val)
+        
+        resultants["A) Nothing"] = [0] * len(profit)
+        resultants["B) Profit"] = profit
+        resultants["C) Loss"] = loss
+        
+        #resultants["Blank"] = [0] * len(profit)
+        return resultants.sort_values(by='Date')
