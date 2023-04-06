@@ -1,7 +1,11 @@
 import streamlit as st
 import regex as re
 import pandas as pd
-from db_funcs import db_setup, UserDB, LedgerDB
+import numpy as np
+import plotly.express as px
+from db_funcs import db_setup, UserDB, LedgerDB, VisDB
+import datetime
+import altair as alt
 
 DB_FILE = "pkr.db"
 
@@ -49,22 +53,26 @@ class Ledger:
 
     def __add_entry(self):
         with st.form(key='add'):
-            col1, col2 = st.columns(2)
-            buy_in = col1.text_input("Buy In $")
-            buy_out = col2.text_input("Buy Out $")
+            col1, col2, col3 = st.columns(3)
+            date = col1.date_input(
+                "Date of Entry",
+                datetime.date.today())
+            buy_in = col2.text_input("Buy In $")
+            buy_out = col3.text_input("Buy Out $")
             add = st.form_submit_button(label='Add', use_container_width=True)
         if add:
-            self.__ledger_db.add_row(self.__username, buy_in, buy_out)
+            self.__ledger_db.add_row(self.__username, buy_in, buy_out, date)
 
     def __update_entry(self):
         with st.form(key='update'):
-            col0, col1, col2 = st.columns(3)
+            col0, col1, col2, col3 = st.columns(4)
+            date = col1.date_input("Date of Entry")
             rowid = col0.text_input("Entry ID")
-            buy_in = col1.text_input("Buy In $")
-            buy_out = col2.text_input("Buy Out $")
+            buy_in = col2.text_input("Buy In $")
+            buy_out = col3.text_input("Buy Out $")
             update = st.form_submit_button(label='Update', use_container_width=True)
         if update:
-            self.__ledger_db.update_row(rowid, buy_in, buy_out)
+            self.__ledger_db.update_row(rowid, buy_in, buy_out, date)
 
     def __drop_entry(self):
         with st.form(key='drop'):
@@ -84,7 +92,7 @@ class Ledger:
         ledger = self.__ledger_db.get_enhanced_ledger(self.__username)
         self.__display_stats(ledger)
         table = ledger.style.format({"Buy In": '${:.2f}', "Buy Out": '${:.2f}',
-                                      "Gain/Loss": '${:.2f}', "% Change": "{0:+g}%"},
+                                      "PnL": '${:.2f}', "% Change": "{0:+g}%"},
                                       na_rep="N/A", precision=2)
         st.dataframe(table, use_container_width=True)
 
@@ -96,6 +104,20 @@ class Ledger:
             self.__update_entry()
         with st.expander("Remove Ledger Entry"):
             self.__drop_entry()
+
+class Visualize:
+    def __init__(self, db, username):
+        self.__db = LedgerDB(db)
+        self.__graphs = VisDB(db)
+        self.__username = username
+
+    def graph_datevspnl(self):
+        ledger = self.__db.get_enhanced_ledger(self.__username)
+        data = self.__graphs.get_date_pnl(ledger)
+        fig = px.line(data, x='Date', y="B) Profit")
+        st.plotly_chart(fig)
+        data = data.drop("Date", axis=1)
+        st.bar_chart(data, use_container_width=True)
 
 if __name__ == "__main__":
     streamlit_setup()
@@ -117,9 +139,11 @@ if __name__ == "__main__":
             auth.register(username, password)
     else:
         log, graph = st.tabs(["Log", "Graph"])
-        ledger = Ledger(db, st.session_state["username"])
+        user = st.session_state["username"]
+        ledger = Ledger(db, user)
+        vis = Visualize(db, user)
         with log:
             ledger.display()
             ledger.update()
         with graph:
-            st.write("HI")
+            vis.graph_datevspnl()
