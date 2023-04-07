@@ -3,7 +3,7 @@ import regex as re
 import pandas as pd
 import numpy as np
 import plotly.express as px
-from db_funcs import db_setup, UserDB, LedgerDB, VisDB
+from db_funcs import db_setup, UserDB, LedgerDB, Analytics
 import datetime
 
 DB_FILE = "pkr.db"
@@ -80,23 +80,24 @@ class Ledger:
             self.__ledger_db.delete_row(rowid, self.__username)
 
     def __display_stats(self, ledger: pd.DataFrame):
-        _, col1, _, col2, _, col3, _ = st.columns([3,4,1,4,1,4,2])
+        _, col0, _, col1, _, col2, _, col3, _ = st.columns([2,3,1,3,1,3,1,3,1])
         stats = self.__ledger_db.get_stats(ledger)
-        c1, c2, c3, c4 = "Capital Spent", "Revenue", "Total PnL", "Total Growth"
-        col1.metric(c1, "${:0.2f}".format(stats[c1]))
-        col2.metric(c2, "${:0.2f}".format(stats[c2]))
-        col3.metric(c3, "${:0.2f}".format(stats[c3]), "{:0.2f}%".format(stats[c4]))
+        c0, c1, c2, c3, c4 = "Current Play Streak", "Capital Spent", "Revenue", "Total PnL", "Total Growth"
+        col0.metric(c0 + ":fire:", f"{stats[c0]} Day(s)")
+        col1.metric(c1 + ":dollar:", "${:0.2f}".format(stats[c1]))
+        col2.metric(c2 + ":money_with_wings:", "${:0.2f}".format(stats[c2]))
+        col3.metric(c3 + ":chart_with_upwards_trend:", "${:0.2f}".format(stats[c3]), "{:0.2f}%".format(stats[c4]))
 
     def display(self):
         ledger = self.__ledger_db.get_enhanced_ledger(self.__username)
         self.__display_stats(ledger)
         table = ledger.style.format({"Buy In": '${:.2f}', "Buy Out": '${:.2f}',
-                                      "PnL ($)": '${:.2f}', "PnL (%)": "{0:+g}%"},
+                                      "PnL ($)": '${:.2f}', "RoI (%)": "{0:+g}%"},
                                       na_rep="N/A", precision=2)
         st.dataframe(table, use_container_width=True)
 
     def update(self):
-        st.button("Refresh Ledger", use_container_width=True)
+        st.button("Refresh Ledger :arrows_counterclockwise:", use_container_width=True)
         with st.expander("Add Ledger Entry"):
             self.__add_entry()
         with st.expander("Update Ledger Entry"):
@@ -107,21 +108,24 @@ class Ledger:
 class Visualize:
     def __init__(self, db, username):
         self.__db = LedgerDB(db)
-        self.__graphs = VisDB(db)
+        self.__graphs = Analytics(db)
         self.__username = username
 
-    def graph_datevspnl(self):
+    def graph_datevspnl(self, col):
         ledger = self.__db.get_enhanced_ledger(self.__username)
         pnlxdate = self.__graphs.pnl_by_date(ledger)
         fig = px.line(pnlxdate, x='Date', y="Total PnL (Profits & Losses)", 
                       title="Total Profits & Losses Since Start of Ledger")
-        st.plotly_chart(fig, use_container_width=True)
+        col.plotly_chart(fig, use_container_width=True)
     
-    def graph_plvsentry(self):
+    def graph_plvsentry(self, col):
         ledger = self.__db.get_enhanced_ledger(self.__username)
         plxentry = self.__graphs.net_by_entry(ledger)
-        st.write("**Profits & Losses on an Entry-by-Entry Basis**")
-        st.bar_chart(plxentry, x="Significant Entries", use_container_width=True)
+        col.write("")
+        col.write("")
+        col.write("**Profits & Losses on an Entry-by-Entry Basis**")
+        col.bar_chart(plxentry, x="Significant Entries", use_container_width=True)
+
 
 if __name__ == "__main__":
     streamlit_setup()
@@ -142,14 +146,14 @@ if __name__ == "__main__":
         elif register:
             auth.register(username, password)
     else:
-        log, datevspnl, plvsentry = st.tabs(["Ledger", "Total PnL Over Time", "PnL Per Entry Over Time"])
+        log, pnl = st.tabs(["Ledger :scroll:", "PnL Charts :chart_with_upwards_trend:"])
         user = st.session_state["username"]
         ledger = Ledger(db, user)
         vis = Visualize(db, user)
         with log:
             ledger.display()
             ledger.update()
-        with datevspnl:
-            vis.graph_datevspnl()
-        with plvsentry:
-            vis.graph_plvsentry()
+        with pnl:
+            col1, col2 = st.columns(2)
+            vis.graph_datevspnl(col1)
+            vis.graph_plvsentry(col2)
