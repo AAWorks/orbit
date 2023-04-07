@@ -55,7 +55,7 @@ class LedgerDB:
 
     def get_base_ledger(self, username: str) -> pd.DataFrame:
         if len(self.__db.select("ledgers", user=username)) == 0:
-            yesterday = datetime.date.today - datetime.timedelta(days = 1)
+            yesterday = datetime.date.today() - datetime.timedelta(days = 1)
             self.__add_entry(username, 0, 0, yesterday)
     
         sqlledger = [row for row in self.__db.select("ledgers", user=username)]
@@ -74,20 +74,32 @@ class LedgerDB:
         ledger['Date'] = pd.to_datetime(ledger['Date']).dt.date
         ledger = ledger.sort_values(by='Date')
         ledger["PnL ($)"] = ledger["Buy Out"] - ledger["Buy In"]
-        ledger["PnL (%)"] = ledger["PnL ($)"] / ledger["Buy In"] * 100
+        ledger["RoI (%)"] = ledger["PnL ($)"] / ledger["Buy In"] * 100
         ids = ledger["Entry"]
         ledger = ledger.drop("Entry", axis=1)
         ledger["Entry"] = ids
         return ledger
     
+    def __get_current_playstreak(self, ledger):
+        start_date = datetime.date.today() - datetime.timedelta(days = 1)
+        dates = pd.to_datetime(ledger['Date'])[::-1]
+        dates = [date.date() for date in dates.sort_values(ascending=False)]
+        count = 0
+        while len(dates) > 0 and start_date == dates.pop(0):
+            count += 1
+            start_date -= datetime.timedelta(days = 1)
+        return count
+
     def get_stats(self, ledger) -> pd.DataFrame:
+        count = self.__get_current_playstreak(ledger)
         handle_0 = sum(ledger["Buy In"])
         if handle_0 == 0:
             handle_0 = 1
         stats = {"Capital Spent": sum(ledger["Buy In"]), 
                  "Revenue": sum(ledger["Buy Out"]), 
                  "Total PnL": sum(ledger["PnL ($)"]), 
-                 "Total Growth": sum(ledger["PnL ($)"]) / handle_0 * 100
+                 "Total Growth": sum(ledger["PnL ($)"]) / handle_0 * 100,
+                 "Current Play Streak": count
         }
         return stats
     
@@ -122,7 +134,7 @@ class LedgerDB:
         else:
             st.error("Entry not found.")
 
-class VisDB:
+class Analytics:
     def __init__(self, db):
         self.__db = db
 
